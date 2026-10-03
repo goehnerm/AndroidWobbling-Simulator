@@ -12,6 +12,10 @@ import android.os.SystemClock
 import com.goehnerm.wobblingsimulator.databinding.FragmentPlayBinding
 import android.media.SoundPool
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.goehnerm.wobblingsimulator.data.GameDataManager
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -20,6 +24,7 @@ import java.util.Locale
 class PlayFragment : Fragment() {
 
     private var _binding: FragmentPlayBinding? = null
+    private lateinit var dataManager: GameDataManager
     private var imageIndex = 1
     private var counter = 0
     private var highScore = 0
@@ -43,32 +48,21 @@ class PlayFragment : Fragment() {
         return binding.root
 
     }
-    private fun gameOver(intervalMs: Long, bpm: Double) {
-        binding.playButton.isEnabled = false
-        binding.textView.text = "Game! Score: $counter"
-        binding.textView.text = String.format(
-            Locale.US,
-            "FAILED!\nInterval: %d ms\nBPM: %.1f\nScore: %d",
-            intervalMs, bpm, counter
-        )
-        binding.restartButton.visibility = View.VISIBLE
-    }
-    private fun restart() {
-        counter = 0
-        lastTap = 0L
-        imageIndex = 1
-
-        binding.textView.text = "0"
-        binding.mainImage.setImageResource(R.drawable._1)
-        binding.playButton.isEnabled = true
-
-        binding.restartButton.visibility = View.GONE
-    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         drawable1 = ContextCompat.getDrawable(requireContext(), R.drawable._1)
         drawable2 = ContextCompat.getDrawable(requireContext(), R.drawable._2)
+
+        dataManager = GameDataManager(requireContext())
+        lifecycleScope.launch {
+            dataManager.highScoreFlow.collectLatest { score ->
+                highScore = score
+                // Example: Update UI text with saved high score
+                binding.highScoreText?.text = "High Score: $highScore"
+            }
+        }
+
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -94,7 +88,7 @@ class PlayFragment : Fragment() {
             }
             lastTap = currentTimeMs
             counter++
-            binding.textView.text = counter.toString()
+            binding.textView.text = "Score: $counter"
             if (imageIndex == 1){
                 binding.mainImage.setImageDrawable(drawable2)
                 imageIndex=2
@@ -113,5 +107,29 @@ class PlayFragment : Fragment() {
         soundPool?.release()
         soundPool = null
         _binding = null
+    }
+    private fun gameOver(intervalMs: Long, bpm: Double) {
+        binding.playButton.isEnabled = false
+        binding.textView.text = "Score: $counter"
+        /*binding.textView.text = String.format(
+            Locale.US,
+            "FAILED!\nInterval: %d ms\nBPM: %.1f\nScore: %d",
+            intervalMs, bpm, counter
+        )*/
+        lifecycleScope.launch {
+            dataManager.saveHighScore(counter)
+        }
+        binding.restartButton.visibility = View.VISIBLE
+    }
+    private fun restart() {
+        counter = 0
+        lastTap = 0L
+        imageIndex = 1
+
+        binding.textView.text = "0"
+        binding.mainImage.setImageResource(R.drawable._1)
+        binding.playButton.isEnabled = true
+
+        binding.restartButton.visibility = View.GONE
     }
 }
